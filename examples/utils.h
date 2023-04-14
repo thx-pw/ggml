@@ -8,6 +8,8 @@
 #include <random>
 #include <thread>
 
+#include "sentencepiece_processor.h"
+
 //
 // CLI argument parsing
 //
@@ -61,7 +63,7 @@ std::map<std::string, int32_t> json_parse(const std::string & fname);
 // Regex (C++):
 // R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)"
 //
-std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::string & text);
+std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::string & text, const sentencepiece::SentencePieceProcessor & processor);
 
 // load the tokens from encoder.json
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab);

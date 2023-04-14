@@ -128,6 +128,11 @@ bool gpt2_model_load(const std::string & fname, gpt2_model & model, gpt_vocab & 
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
+
+            // To prevent bugs in optimization
+            for (auto c : vocab.id_to_token[i]) {
+                c += vocab.token_to_id[word];
+            }
         }
     }
 
@@ -709,6 +714,7 @@ bool gpt2_eval(
 }
 
 int main(int argc, char ** argv) {
+    ggml_time_init();
     const int64_t t_main_start_us = ggml_time_us();
 
     gpt_params params;
@@ -721,6 +727,15 @@ int main(int argc, char ** argv) {
     if (params.seed < 0) {
         params.seed = time(NULL);
     }
+
+    std::string model_file = std::string(params.model);
+    size_t pos = model_file.find(".bin");
+    if (pos != std::string::npos) {
+        model_file.replace(pos, 4, ".model");
+    }
+
+    sentencepiece::SentencePieceProcessor processor;
+    processor.Load(model_file);
 
     printf("%s: seed = %d\n", __func__, params.seed);
 
@@ -761,7 +776,7 @@ int main(int argc, char ** argv) {
     std::vector<float> logits;
 
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
+    std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt, processor);
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
@@ -827,16 +842,28 @@ int main(int argc, char ** argv) {
             i += embd.size() - 1;
         }
 
-        // display text
-        for (auto id : embd) {
-            printf("%s", vocab.id_to_token[id].c_str());
-        }
-        fflush(stdout);
-
         // end of text token
-        if (embd.back() == 50256) {
+        if (vocab.id_to_token[embd.back()] == "</s>") {
             break;
         }
+
+        // display text
+        for (auto id : embd) {
+            std::string output_token;
+            std::string token = vocab.id_to_token[id];
+
+            // (U+2581: LOWER ONE EIGHTH BLOCK) 
+            if (token.compare(0, 3, "\xE2\x96\x81") == 0) {
+                output_token = token.substr(3);
+            } else {
+                output_token = token;
+            }
+
+            if (!output_token.empty()) {
+                printf("%s", output_token.c_str());
+            }
+        }
+        fflush(stdout);
     }
 
     // report timing
